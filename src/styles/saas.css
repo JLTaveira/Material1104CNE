@@ -1,0 +1,522 @@
+/* Styles CSS
+ src/styles/saas.css
+ 2026-02-14 - Joao Taveira (jltaveira@gmail.com) */
+ 
+/* =========================
+   Theme / Base
+========================= */
+:root{
+  --bg: #f5f7fb;
+  --card: #ffffff;
+  --text: #0f172a;
+  --muted: rgba(15,23,42,.65);
+  --border: rgba(15,23,42,.10);
+  --shadow: 0 10px 30px rgba(15,23,42,.08);
+  --radius: 16px;
+
+  --primary: #0b1220;
+  --primary2: rgba(255,255,255,.08);
+
+  --danger: rgba(220, 38, 38, 0.92);
+}
+
+*{ box-sizing: border-box; }
+
+body{
+  margin:0;
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: var(--bg);
+}
+
+a{ color: inherit; }
+
+/* =========================
+   App Shell Layout
+========================= */
+.app-shell{
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 290px 1fr;
+}
+
+/* =========================
+   Sidebar
+========================= */
+.sidebar{
+  background: var(--primary);
+  color: white;
+  display:flex;
+  flex-direction:column;
+  padding: 18px;
+  gap: 14px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brand{
+  display:flex;
+  gap: 12px;
+  align-items:center;
+  padding: 10px 10px 14px;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+.brand-logo{
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,.18);
+}
+
+.brand-title{ font-weight: 800; font-size: 16px; line-height: 1.1; }
+.brand-sub{ font-size: 12px; opacity: .75; margin-top: 4px; }
+
+.nav{ display:flex; flex-direction:column; gap: 8px; padding-top: 8px; }
+
+.nav-link{
+  text-decoration:none;
+  color: rgba(255,255,255,.88);
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: transparent;
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+.nav-link:hover{ background: rgba(255,255,255,.06); }
+.nav-link.active{ background: rgba(255,255,255,.11); color: #fff; }
+
+.sidebar-footer{
+  margin-top:auto;
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,.10);
+}
+
+.user-chip{
+  background: rgba(255,255,255,.06);
+  border-radius: 14px;
+  padding: 10px 12px;
+  display:flex;
+  gap: 10px;
+  align-items:center;
+}
+
+.user-avatar{
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,.18);
+}
+
+.user-name{ font-weight: 700; }
+.user-role{ font-size: 12px; opacity: .75; margin-top: 2px; }
+
+/* =========================
+   Main / Topbar / Content / Footer
+========================= */
+.main{
+  display:flex;
+  flex-direction:column;
+  min-width: 0;
+  position: relative;
+}
+
+/* Watermark do logo do agrupamento */
+.main::before{
+  content:"";
+  position: fixed;
+  inset: 0;
+  background-image: url("../assets/logo_agrup.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 520px;
+  opacity: 0.06;
+  pointer-events: none;
+  z-index: 0; /* sempre abaixo do conteúdo e do modal */
+}
+
+.topbar{
+  height: 64px;
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  padding: 0 18px;
+  background: rgba(255,255,255,.75);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.topbar-left{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+  font-weight: 700;
+  color: rgba(15,23,42,.72);
+}
+
+.topbar-right{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+.topbar-meta{
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.content{
+  padding: 18px;
+  position: relative;
+  z-index: 1;
+}
+
+/* footer central fora da sidebar */
+.app-footer{
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 14px 18px 18px;
+  font-size: 12px;
+  color: rgba(15,23,42,.60);
+}
+
+/* =========================
+   Common UI Components
+========================= */
+.card{
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+.h3{ margin: 0 0 12px 0; }
+
+.row{
+  display:flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items:center;
+}
+
+.btn{
+  border: 1px solid var(--border);
+  background: #111827;
+  color: white;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor:pointer;
+  font-weight: 600;
+}
+.btn:hover{ opacity: .93; }
+
+.btn-secondary{
+  border: 1px solid var(--border);
+  background: white;
+  color: #111827;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor:pointer;
+  font-weight: 600;
+}
+.btn-secondary:hover{ background: rgba(17,24,39,.03); }
+
+.btn-ghost{
+  border: 1px solid rgba(255,255,255,.15);
+  background: transparent;
+  color: rgba(255,255,255,.92);
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor:pointer;
+  font-weight: 600;
+}
+.btn-ghost:hover{ background: rgba(255,255,255,.08); }
+
+/* Botão de perigo (usa com classe btn + btn-danger) */
+.btn-danger{
+  border: 1px solid rgba(0,0,0,0.10);
+  background: var(--danger);
+}
+.btn-danger:hover{
+  background: rgba(220, 38, 38, 1);
+}
+
+/* Inputs / Selects */
+.input, .select{
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: white;
+  outline: none;
+}
+
+/* Fix selects/inputs no Android (texto invisível) */
+.select, select, .input, input, textarea {
+  color: #111 !important;
+  -webkit-text-fill-color: #111 !important;
+}
+.select, select { background: rgba(255,255,255,0.92) !important; }
+select option {
+  color: #111;
+  background: #fff;
+}
+
+/* Tables */
+.table-wrap{ overflow-x:auto; }
+.table{
+  width:100%;
+  border-collapse: collapse;
+}
+.table th{
+  text-align:left;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(17,24,39,.02);
+}
+.table td{
+  padding: 10px;
+  border-bottom: 1px solid rgba(15,23,42,.08);
+}
+.mono{
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+/* =========================
+   Admin/Stats accents + chips
+========================= */
+.card-accent{
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  background: white;
+  position: relative;
+  overflow: hidden;
+}
+.card-accent::before{
+  content:"";
+  position:absolute;
+  inset: 0;
+  opacity: .10;
+  pointer-events:none;
+}
+
+/* variações */
+.accent-blue::before{ background: linear-gradient(135deg, #2563eb, #60a5fa); }
+.accent-amber::before{ background: linear-gradient(135deg, #f59e0b, #fbbf24); }
+.accent-purple::before{ background: linear-gradient(135deg, #7c3aed, #a78bfa); }
+.accent-green::before{ background: linear-gradient(135deg, #16a34a, #86efac); }
+.accent-slate::before{ background: linear-gradient(135deg, #334155, #94a3b8); }
+
+/* Chips de estado */
+.chip{
+  display:inline-flex;
+  align-items:center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  background: rgba(17,24,39,.02);
+}
+
+.chip-sub{ background: rgba(37,99,235,.08); border-color: rgba(37,99,235,.20); }
+.chip-prep{ background: rgba(245,158,11,.10); border-color: rgba(245,158,11,.25); }
+.chip-ent{ background: rgba(124,58,237,.10); border-color: rgba(124,58,237,.22); }
+.chip-dev{ background: rgba(22,163,74,.10); border-color: rgba(22,163,74,.22); }
+.chip-can{ background: rgba(100,116,139,.10); border-color: rgba(100,116,139,.22); }
+
+/* =========================
+   Mobile Drawer + Overlay
+========================= */
+.mobile-only { display: none; }
+
+.icon-btn{
+  border: 1px solid rgba(0,0,0,0.08);
+  background: rgba(255,255,255,0.8);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+/* Overlay do drawer */
+.mobile-overlay{
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 30;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease;
+}
+.mobile-overlay.open{
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* =========================
+   Modal (Confirm)
+========================= */
+.modal-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: grid;
+  place-items: center;
+  z-index: 80; /* acima de tudo */
+  padding: 16px;
+}
+
+.modal-card{
+  width: min(520px, 92vw);
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(0,0,0,0.10);
+  border-radius: 16px;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.25);
+  overflow: hidden;
+}
+
+.modal-header{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(0,0,0,0.08);
+}
+
+.modal-title{
+  font-weight: 900;
+  letter-spacing: .2px;
+}
+
+.modal-x{
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 16px;
+  opacity: .75;
+}
+.modal-x:hover{ opacity: 1; }
+
+.modal-body{
+  padding: 16px;
+  font-size: 14px;
+  opacity: .9;
+}
+
+.modal-actions{
+  display:flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 16px;
+  border-top: 1px solid rgba(0,0,0,0.08);
+}
+
+/* =========================
+   Responsive
+========================= */
+@media (max-width: 980px){
+  .app-shell{ grid-template-columns: 1fr; }
+
+  .mobile-only{ display: inline-flex; }
+
+  /* sidebar vira drawer */
+  .sidebar{
+    display: block;
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(86vw, 320px);
+    transform: translateX(-105%);
+    transition: transform .2s ease;
+    z-index: 40;
+  }
+  .sidebar.open{
+    transform: translateX(0);
+  }
+
+  .mobile-overlay{
+    display: block;
+  }
+
+  /* main ocupa tudo */
+  .main{
+    margin-left: 0;
+  }
+}
+
+/* Modal (confirm bonito) */
+.modal-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.38);
+  display: grid;
+  place-items: center;
+  z-index: 60;
+  padding: 18px;
+}
+
+.modal-card{
+  width: min(560px, 95vw);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.modal-header{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  padding: 14px 14px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(17,24,39,.02);
+}
+
+.modal-title{
+  font-weight: 800;
+}
+
+.modal-x{
+  border: 1px solid var(--border);
+  background: white;
+  border-radius: 10px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.modal-body{
+  padding: 14px;
+  color: rgba(15,23,42,.85);
+}
+
+.modal-actions{
+  padding: 14px;
+  display:flex;
+  justify-content: flex-end;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.btn-danger{
+  background: #b91c1c !important;
+  border-color: rgba(185,28,28,.35) !important;
+}

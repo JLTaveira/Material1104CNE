@@ -1,0 +1,72 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isActiveUser() {
+      return signedIn()
+        && userDoc().ativo == true;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && userDoc().role == "ADMIN"
+        && userDoc().ativo == true;
+    }
+
+    // Perfis
+    match /users/{uid} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow write: if isAdmin();
+    }
+
+    // Utilizações: todos os utilizadores ativos podem ler (para filtros)
+    match /utilizacoes/{id} {
+      allow read: if isActiveUser();
+      allow write: if false;
+    }
+
+    // Tipos: utilizador ativo lê; admin escreve
+    match /tipos/{id} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin();
+    }
+
+    // Inventário: utilizador ativo lê; admin escreve
+    match /equipamentos/{id} {
+      allow read: if isActiveUser();
+      allow write: if isAdmin();
+    }
+
+    // Eventos por equipamento (ADMIN apenas)
+    match /eventosEquipamento/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // Requisições (USER cria e vê as suas; ADMIN vê tudo)
+    match /requisicoes/{rid} {
+      allow create: if isActiveUser();
+      allow read: if isAdmin()
+        || (isActiveUser() && resource.data.criadaPorUid == request.auth.uid);
+      allow update, delete: if isAdmin();
+
+      match /itens/{iid} {
+        allow create, read: if isAdmin()
+          || (isActiveUser()
+              && get(/databases/$(database)/documents/requisicoes/$(rid)).data.criadaPorUid == request.auth.uid);
+        allow update, delete: if isAdmin();
+      }
+
+      match /alocacoes/{aid} {
+        allow read, write: if isAdmin();
+      }
+    }
+  }
+}

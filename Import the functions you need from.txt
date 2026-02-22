@@ -1,0 +1,78 @@
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBxuRL9jqitNP4AMhGT5jTLvv-zyRMbksg",
+  authDomain: "azimute-b1655.firebaseapp.com",
+  projectId: "azimute-b1655",
+  storageBucket: "azimute-b1655.firebasestorage.app",
+  messagingSenderId: "905979775988",
+  appId: "1:905979775988:web:991c25ac4150f136a587a1"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+PSW: Azimute#1104!
+Users:
+ALCATEIA:
+9115021104001@azimute.cne (YDoYmcbysUPTlcPjH8j6a9oE6H12) - Catarina Lopes
+0415021104010@azimute.cne (D5Lsk6gmyDOBgPbz6O09RXzd3Xi1) - Sofia Governa
+1915021104020@azimute.cne (iBIReaztPedXcb5umpnffxNRQ5j2) - Larissa Prado
+CLÃ
+9015020391001@azimute.cne (SCf0AIDEqtb1FYHWpDAqM3GakIO2) - João Taveira
+8915020391001@azimute.cne (Hz0ZsJIwN1QPhWT92HR3qU8yhKa2) - Bento Lopes
+2415021104006@azimute.cne (mdFJMfoVFxZkBnxmrdCSJPmEbK43) - Andreia Gomes
+
+
+USERS test:
+1315021104001@azimute.cne - Leonor Monteiro
+2515021104011@azimute.cne - Maria Francisca Mateus
+1615021104002@azimute.cne - Duda
+2315021104013@azimute.cne - Maria Garcez
+1615021104011@azimute.cne - Xico
+9115021104001@azimute.cne - Catarina CU
+0415021104010@azimute.cne - Sofia CUA
+8915020391001@azimute.cne - Bento INST
+1715021104012@azimute.cne - Paulo CA
+9615021104002@azimute.cne - Bruno III
+
+
+----------------------------------------------------------------------------------------------------------------------------------------------------
+
+= ETAPAS = (etapaProgresso)
+LOBITOS:
+PATA_TENRA
+LOBO_VALENTE
+LOBO_CORTES
+LOBO_AMIGO
+
+EXPLORADORES:
+APELO
+ALIANCA
+RUMO
+DESCOBERTA
+
+PIONEIROS:
+DESPRENDIMENTO
+CONHECIMENTO
+VONTADE
+CONTRUCAO
+
+CAMINHEIROS:
+CAMINHO
+COMUNIDADE
+SERVICO
+PARTIDA
+
+DIRIGENTES:
+CHEFE_UNIDADE
+CHEFE_UNIDADE_ADJUNTO
+INSTRUTOR_SECAO
+CHEFE_AGRUPAMENTO
+SECRETARIO_AGRUPAMENTO
