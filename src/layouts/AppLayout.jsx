@@ -20,24 +20,27 @@ export default function AppLayout({ children }) {
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const nav = useMemo(() => {
-    // Base para todos (USER e ADMIN)
-    const base = [
-      { to: "/", label: "Início" },
-      { to: "/requisicoes", label: "Minhas Requisições" },
-      { to: "/inventario", label: "Inventário" }, // ✅ novo para USER
-    ];
+const nav = useMemo(() => {
+  const role = profile?.role;
+  const items = [
+    { to: "/", label: "Início" },
+    { to: "/inventario", label: "Consultar Inventário" },
+  ];
 
-    // Admin extra
-    const admin = [
-      { to: "/admin", label: "Dashboard" },
-      { to: "/admin/inventario", label: "Inventário (Gestão)" },
-      { to: "/admin/requisicoes", label: "Requisições" },
-      { to: "/admin/users", label: "Utilizadores" },
-    ];
+  // Se for GESTOR ou ADMIN, vê ferramentas de material
+  if (role === "ADMIN" || role === "GESTOR") {
+    items.push({ to: "/admin", label: "Dashboard Material" });
+    items.push({ to: "/admin/inventario", label: "Gestão Inventário" });
+    items.push({ to: "/admin/requisicoes", label: "Gestão Requisições" });
+  }
 
-    return isAdmin ? [...base, ...admin] : base;
-  }, [isAdmin]);
+  // APENAS ADMIN vê utilizadores
+  if (role === "ADMIN") {
+    items.push({ to: "/admin/users", label: "Utilizadores" });
+  }
+
+  return items;
+}, [profile]);
 
   function active(to) {
     return loc.pathname === to || (to !== "/" && loc.pathname.startsWith(to));

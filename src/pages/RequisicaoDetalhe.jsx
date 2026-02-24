@@ -1,10 +1,10 @@
 /* Detalhe da Requisição + Itens + Alocações + Botões
  src/pages/RequisicaoDetalhe.jsx
- 2026-02-13 - Joao Taveira (jltaveira@gmail.com) */
+ 2026-02-14 - Joao Taveira (jltaveira@gmail.com) 
+  2026-02-24 - revisão e optimização com Gemini */
  
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { writeBatch } from "firebase/firestore";
 import {
   collection,
   doc,
@@ -17,9 +17,31 @@ import {
   serverTimestamp,
   where,
   limit,
+  writeBatch,
+  documentId // Importante para pedir vários documentos de uma vez
 } from "firebase/firestore";
 import { db } from "../firebase";
 import AppLayout from "../layouts/AppLayout";
+
+/* ---------------- Dicionário para Textos Amigáveis ---------------- */
+const TEXTO_AMIGAVEL = {
+  "SUBMETIDA": "Submetida",
+  "EM_PREPARACAO": "Em preparação",
+  "ENTREGUE": "Entregue",
+  "DEVOLVIDA": "Devolvida",
+  "CANCELADA": "Cancelada",
+  "DISPONIVEL": "Disponível",
+  "EM_USO": "Em uso",
+  "EM_REPARACAO": "Em reparação",
+  "ABATIDO": "Abatido",
+  "OPERACIONAL": "Operacional",
+  "RETIDO": "Retido"
+};
+
+function fmtLabel(val) {
+  if (!val) return val;
+  return TEXTO_AMIGAVEL[val] || val;
+}
 
 function toDate(v) {
   if (!v) return null;
@@ -51,14 +73,14 @@ export default function RequisicaoDetalhe() {
   const [tipos, setTipos] = useState([]);
 
   // filtros no painel de disponíveis
-  const [fUtil, setFUtil] = useState(""); // "01", "02", ...
-  const [fTipo, setFTipo] = useState(""); // "01", "02", ...
+  const [fUtil, setFUtil] = useState("");
+  const [fTipo, setFTipo] = useState("");
   const [qText, setQText] = useState("");
   const [loadingDisp, setLoadingDisp] = useState(false);
 
-  // notas internas por equipamento (descricao/observacoes) — editáveis aqui também
-  const [equipNotas, setEquipNotas] = useState({}); // { [equipId]: { descricao, observacoes, dirty } }
-  const [saveBusy, setSaveBusy] = useState({}); // { [equipId]: true }
+  // notas internas por equipamento (descricao/observacoes)
+  const [equipNotas, setEquipNotas] = useState({}); 
+  const [saveBusy, setSaveBusy] = useState({}); 
 
   async function load() {
     setLoading(true);
@@ -78,33 +100,40 @@ export default function RequisicaoDetalhe() {
       const list = itensSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
       setItens(list);
 
-      // carrega notas internas dos equipamentos já alocados (para editar)
-      await hydrateEquipNotas(list.map((x) => x.equipamentoId));
+      // OTIMIZAÇÃO 1: Evitar chamadas "cascata" para carregar as notas
+      await hydrateEquipNotasEficiente(list.map((x) => x.equipamentoId));
     } finally {
       setLoading(false);
     }
   }
 
-  async function hydrateEquipNotas(equipIds) {
+  // NOVA FUNÇÃO OTIMIZADA: Pede a informação de até 30 equipamentos Numa única ida ao servidor
+  async function hydrateEquipNotasEficiente(equipIds) {
     const uniq = Array.from(new Set((equipIds ?? []).filter(Boolean)));
     if (uniq.length === 0) return;
 
     try {
       const next = { ...equipNotas };
-      // lê em série (simples e estável para poucos itens)
-      for (const eid of uniq) {
-        if (next[eid]) continue;
-        const snap = await getDoc(doc(db, "equipamentos", eid));
-        if (!snap.exists()) {
-          next[eid] = { descricao: "", observacoes: "", dirty: false };
-        } else {
-          const eq = snap.data();
-          next[eid] = {
+      const chunks = [];
+      
+      // O Firestore permite o operador 'in' para até 30 itens de cada vez
+      for (let i = 0; i < uniq.length; i += 30) {
+        chunks.push(uniq.slice(i, i + 30));
+      }
+
+      for (const chunk of chunks) {
+        if (chunk.length === 0) continue;
+        const q = query(collection(db, "equipamentos"), where(documentId(), "in", chunk));
+        const snap = await getDocs(q);
+        
+        snap.forEach(docSnap => {
+          const eq = docSnap.data();
+          next[docSnap.id] = {
             descricao: eq.descricao ?? "",
             observacoes: eq.observacoes ?? "",
             dirty: false,
           };
-        }
+        });
       }
       setEquipNotas(next);
     } catch (e) {
@@ -126,7 +155,7 @@ export default function RequisicaoDetalhe() {
       let q = query(
         collection(db, "equipamentos"),
         where("estado", "==", "DISPONIVEL"),
-        limit(500)
+        limit(200) // Limite seguro para não sobrecarregar
       );
 
       if (fUtil) q = query(q, where("utilizacaoCodigo", "==", fUtil));
@@ -159,8 +188,18 @@ export default function RequisicaoDetalhe() {
 
       setEquipDisponiveis(rows);
 
-      // também garante notas carregadas para os disponíveis (para editar ali)
-      await hydrateEquipNotas(rows.map((x) => x.id));
+      // OTIMIZAÇÃO 2: Já sacámos as descrições e observações na query acima!
+      // Escusamos de ir ao Firebase outra vez pedir os mesmos dados.
+      const newNotas = {};
+      rows.forEach(r => {
+        newNotas[r.id] = {
+          descricao: r.descricao ?? "",
+          observacoes: r.observacoes ?? "",
+          dirty: false
+        };
+      });
+      setEquipNotas(prev => ({...prev, ...newNotas}));
+
     } catch (e) {
       console.error(e);
       setMsg("Erro a carregar equipamentos disponíveis (ver consola).");
@@ -181,18 +220,12 @@ export default function RequisicaoDetalhe() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [req?.id, fUtil, fTipo, qText, itens.length]);
 
-  const periodo = useMemo(() => {
-    const s = toDate(req?.dataInicio);
-    const e = toDate(req?.dataFim);
-    return { s, e };
-  }, [req]);
-
   async function setEstado(novoEstado) {
     setMsg("");
     const reqRef = doc(db, "requisicoes", id);
     await updateDoc(reqRef, { estado: novoEstado, atualizadoEm: serverTimestamp() });
     await load();
-    setMsg(`Estado atualizado para ${novoEstado}`);
+    setMsg(`Estado atualizado para ${fmtLabel(novoEstado)}`);
   }
 
   async function validarEquipamentoDisponivel(equipId) {
@@ -205,12 +238,12 @@ export default function RequisicaoDetalhe() {
     const estado = (eq.estado ?? "DISPONIVEL");
     if (estado === "ABATIDO") return { ok: false, reason: "Equipamento abatido." };
     if (estado !== "DISPONIVEL") {
-      return { ok: false, reason: `Equipamento indisponível (estado=${estado}).` };
+      return { ok: false, reason: `Equipamento indisponível (estado = ${fmtLabel(estado)}).` };
     }
 
     const oper = (eq.estadoOperacional ?? "OPERACIONAL");
-    if (oper === "RETIDO") return { ok: false, reason: "Equipamento retido (estadoOperacional=RETIDO)." };
-    if (oper === "ABATIDO") return { ok: false, reason: "Equipamento operacional=ABATIDO." };
+    if (oper === "RETIDO") return { ok: false, reason: "Equipamento retido." };
+    if (oper === "ABATIDO") return { ok: false, reason: "Equipamento abatido." };
 
     return { ok: true, eq };
   }
@@ -283,25 +316,38 @@ export default function RequisicaoDetalhe() {
     }
   }
 
+  // OTIMIZAÇÃO 3: Gravação em Batch (Tudo de uma vez de forma rápida e segura)
   async function marcarEntregue() {
     setMsg("");
     if (itens.length === 0) {
-      setMsg("Sem itens. Adiciona equipamentos antes de marcar ENTREGUE.");
+      setMsg("Sem itens. Adiciona equipamentos antes de marcar como Entregue.");
       return;
     }
 
-    const base = req?.dataInicio ?? null;
+    try {
+      const base = req?.dataInicio ?? null;
+      const batch = writeBatch(db);
 
-    for (const it of itens) {
-      await updateDoc(doc(db, "equipamentos", it.equipamentoId), {
-        estado: "EM_USO",
-        ultimaRequisicaoEm: base ? base : serverTimestamp(),
-        atualizadoEm: serverTimestamp(),
+      for (const it of itens) {
+        batch.update(doc(db, "equipamentos", it.equipamentoId), {
+          estado: "EM_USO",
+          ultimaRequisicaoEm: base ? base : serverTimestamp(),
+          atualizadoEm: serverTimestamp(),
+        });
+      }
+
+      batch.update(doc(db, "requisicoes", id), {
+        estado: "ENTREGUE",
+        atualizadoEm: serverTimestamp()
       });
-    }
 
-    await setEstado("ENTREGUE");
-    setMsg("ENTREGUE: equipamentos marcados como EM_USO e ultimaRequisicaoEm atualizada.");
+      await batch.commit();
+      await load();
+      setMsg("ENTREGUE: equipamentos marcados como Em Uso.");
+    } catch (e) {
+      console.error(e);
+      setMsg("Erro ao marcar como entregue (ver consola).");
+    }
   }
 
   async function marcarDevolvida() {
@@ -309,7 +355,6 @@ export default function RequisicaoDetalhe() {
 
     try {
       const batch = writeBatch(db);
-
       const reqRef = doc(db, "requisicoes", id);
       batch.update(reqRef, { estado: "DEVOLVIDA", atualizadoEm: serverTimestamp() });
 
@@ -343,7 +388,7 @@ export default function RequisicaoDetalhe() {
 
       await batch.commit();
       await load();
-      setMsg("DEVOLVIDA: equipamentos libertados.");
+      setMsg("DEVOLVIDA: equipamentos libertados e marcados como Disponíveis.");
     } catch (e) {
       console.error(e);
       setMsg("Erro ao marcar DEVOLVIDA (ver consola).");
@@ -401,7 +446,7 @@ export default function RequisicaoDetalhe() {
         <div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ fontSize: 12, opacity: 0.7 }}>Estado</div>
-            <div className="chip">{req.estado ?? "-"}</div>
+            <div className="chip">{fmtLabel(req.estado ?? "-")}</div>
           </div>
 
           <div style={{ textAlign: "right" }}>
@@ -416,13 +461,13 @@ export default function RequisicaoDetalhe() {
 
         <div className="row" style={{ marginTop: 12, flexWrap: "wrap" }}>
           <button className="btn-secondary" onClick={() => setEstado("EM_PREPARACAO")}>
-            EM_PREPARACAO
+            Marcar Em Preparação
           </button>
           <button className="btn" onClick={marcarEntregue}>
-            Marcar ENTREGUE
+            Marcar Entregue
           </button>
           <button className="btn-secondary" onClick={marcarDevolvida}>
-            Marcar DEVOLVIDA
+            Marcar Devolvida
           </button>
         </div>
       </div>
@@ -528,7 +573,7 @@ export default function RequisicaoDetalhe() {
         </div>
 
         <div style={{ fontSize: 12, opacity: 0.7, marginTop: 10 }}>
-          Regra: só aloca equipamentos com <b>estado=DISPONIVEL</b> e <b>estadoOperacional≠RETIDO/ABATIDO</b>.
+          Regra: só aloca equipamentos com <b>estado = Disponível</b> e <b>estadoOperacional ≠ Retido/Abatido</b>.
         </div>
       </div>
 

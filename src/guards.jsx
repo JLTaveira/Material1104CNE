@@ -13,10 +13,21 @@ export function RequireAuth({ children }) {
   return children;
 }
 
+// Para páginas de Material e Requisições
+export function RequireGestor({ children }) {
+  const { profile, loading } = useAuth();
+  if (loading) return null;
+  const role = profile?.role;
+  if (role !== "ADMIN" && role !== "GESTOR")
+    return <div style={{ padding: 16 }}>Sem permissões de gestão de material.</div>;
+  return children;
+}
+
+// APENAS para Gestão de Utilizadores
 export function RequireAdmin({ children }) {
   const { profile, loading } = useAuth();
-  if (loading) return <div style={{ padding: 16 }}>A carregar...</div>;
+  if (loading) return null;
   if (profile?.role !== "ADMIN")
-    return <div style={{ padding: 16 }}>Sem permissões de administrador.</div>;
+    return <div style={{ padding: 16 }}>Acesso restrito ao Super-Administrador.</div>;
   return children;
 }

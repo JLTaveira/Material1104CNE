@@ -1,15 +1,30 @@
 /* Lista Requisicoes
  src/pages/Requisicoes.jsx
- 2026-02-13 - Joao Taveira (jltaveira@gmail.com) */
+ 2026-02-13 - Joao Taveira (jltaveira@gmail.com) 
+ 2026-02-24 optimização e revisão do código com Gemini */
  
 import { useEffect, useMemo, useState } from "react";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, getDocs, orderBy, query, limit, startAfter, where } from "firebase/firestore";
 import { db } from "../firebase";
 import { Link } from "react-router-dom";
 import AppLayout from "../layouts/AppLayout";
 import { downloadCSV } from "../utils/csv";
 
 const ESTADOS = ["", "SUBMETIDA", "EM_PREPARACAO", "ENTREGUE", "DEVOLVIDA", "CANCELADA"];
+
+/* ---------------- Dicionário para Textos Amigáveis ---------------- */
+const TEXTO_AMIGAVEL = {
+  "SUBMETIDA": "Submetida",
+  "EM_PREPARACAO": "Em preparação",
+  "ENTREGUE": "Entregue",
+  "DEVOLVIDA": "Devolvida",
+  "CANCELADA": "Cancelada"
+};
+
+function fmtLabel(val) {
+  if (!val) return val;
+  return TEXTO_AMIGAVEL[val] || val;
+}
 
 function toDate(v) {
   if (!v) return null;
@@ -29,24 +44,61 @@ export default function Requisicoes() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Paginação
+  const [lastDoc, setLastDoc] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+
   const [fEstado, setFEstado] = useState("SUBMETIDA");
   const [qText, setQText] = useState("");
   const [dFrom, setDFrom] = useState(""); // YYYY-MM-DD
   const [dTo, setDTo] = useState(""); // YYYY-MM-DD
 
-  async function load() {
-    setLoading(true);
+  // OTIMIZAÇÃO: isLoadMore diz-nos se estamos a pedir a página 1 ou a seguinte
+  async function load(isLoadMore = false) {
+    if (!isLoadMore) setLoading(true);
+    
     try {
       const ref = collection(db, "requisicoes");
-      const qs = query(ref, orderBy("criadaEm", "desc"));
+      let qConstraints = [];
+
+      // OTIMIZAÇÃO: Filtro feito no servidor. O Firebase só envia os estados certos.
+      if (fEstado) {
+        qConstraints.push(where("estado", "==", fEstado));
+      }
+
+      qConstraints.push(orderBy("criadaEm", "desc"));
+      qConstraints.push(limit(50)); // Protege a fatura: pede só 50 de cada vez
+
+      if (isLoadMore && lastDoc) {
+        qConstraints.push(startAfter(lastDoc));
+      }
+
+      const qs = query(ref, ...qConstraints);
       const snap = await getDocs(qs);
-      setRows(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+
+      const newRows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      if (isLoadMore) {
+        setRows((prev) => [...prev, ...newRows]);
+      } else {
+        setRows(newRows);
+      }
+
+      // Guarda o último documento para saber onde começar a próxima página
+      setLastDoc(snap.docs[snap.docs.length - 1] || null);
+      
+      // Se vieram menos de 50, é porque chegámos ao fim da lista
+      setHasMore(snap.docs.length === 50);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => { load(); }, []);
+  // Sempre que o administrador muda o filtro de Estado, recarregamos a 1ª página
+  useEffect(() => { 
+    load(false); 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fEstado]);
 
   const filtered = useMemo(() => {
     const t = qText.trim().toLowerCase();
@@ -54,7 +106,7 @@ export default function Requisicoes() {
     const to = dTo ? new Date(dTo + "T23:59:59") : null;
 
     return rows
-      .filter((r) => (fEstado ? (r.estado ?? "") === fEstado : true))
+      // O fEstado já não está aqui, porque foi filtrado no servidor!
       .filter((r) => {
         const di = toDate(r.dataInicio);
         if (!from && !to) return true;
@@ -68,7 +120,7 @@ export default function Requisicoes() {
         const hay = `${r.id} ${r.observacoes ?? ""} ${r.criadaPorUid ?? ""} ${r.criadaPorNome ?? ""}`.toLowerCase();
         return hay.includes(t);
       });
-  }, [rows, fEstado, qText, dFrom, dTo]);
+  }, [rows, qText, dFrom, dTo]);
 
   function exportCSV() {
     const headers = [
@@ -84,7 +136,7 @@ export default function Requisicoes() {
 
     const out = filtered.map((r) => ({
       id: r.id,
-      estado: r.estado ?? "",
+      estado: fmtLabel(r.estado ?? ""), // CSV com texto amigável
       dataInicio: fmtDate(r.dataInicio),
       dataFim: fmtDate(r.dataFim),
       criadaPorUid: r.criadaPorUid ?? "",
@@ -103,13 +155,13 @@ export default function Requisicoes() {
         <div>
           <h3 className="h3">Requisições</h3>
           <div style={{ fontSize: 13, opacity: 0.7 }}>
-            Filtrar, abrir e exportar.
+            Filtrar, abrir e exportar. A mostrar os registos mais recentes.
           </div>
         </div>
 
         <div className="row">
           <button className="btn-secondary" onClick={exportCSV}>Export CSV</button>
-          <button className="btn-secondary" onClick={load}>Recarregar</button>
+          <button className="btn-secondary" onClick={() => load(false)}>Recarregar</button>
         </div>
       </div>
 
@@ -118,7 +170,7 @@ export default function Requisicoes() {
           <select className="select" value={fEstado} onChange={(e) => setFEstado(e.target.value)}>
             {ESTADOS.map((e) => (
               <option key={e} value={e}>
-                {e ? `Estado: ${e}` : "Estado: TODOS"}
+                {e ? `Estado: ${fmtLabel(e)}` : "Estado: Todos"}
               </option>
             ))}
           </select>
@@ -151,7 +203,7 @@ export default function Requisicoes() {
       </div>
 
       <div className="card" style={{ marginTop: 12 }}>
-        {loading ? (
+        {loading && rows.length === 0 ? (
           <div>A carregar...</div>
         ) : (
           <div className="table-wrap">
@@ -170,7 +222,7 @@ export default function Requisicoes() {
                 {filtered.map((r) => (
                   <tr key={r.id}>
                     <td className="mono">{r.id}</td>
-                    <td><span className="chip">{r.estado ?? "-"}</span></td>
+                    <td><span className="chip">{fmtLabel(r.estado ?? "-")}</span></td>
                     <td>{fmtTS(r.dataInicio)}</td>
                     <td>{fmtTS(r.dataFim)}</td>
                     <td>{r.observacoes ?? "-"}</td>
@@ -180,10 +232,24 @@ export default function Requisicoes() {
                   </tr>
                 ))}
                 {filtered.length === 0 && (
-                  <tr><td colSpan={6}>Sem resultados.</td></tr>
+                  <tr><td colSpan={6}>Sem resultados visíveis.</td></tr>
                 )}
               </tbody>
             </table>
+            
+            {/* OTIMIZAÇÃO: Botão para carregar a página seguinte em vez de tudo de uma vez */}
+            {hasMore && !loading && (
+              <div style={{ textAlign: "center", marginTop: 16 }}>
+                <button className="btn-secondary" onClick={() => load(true)}>
+                  Carregar mais registos antigos...
+                </button>
+              </div>
+            )}
+            {loading && rows.length > 0 && (
+              <div style={{ textAlign: "center", marginTop: 16, opacity: 0.7 }}>
+                A carregar mais...
+              </div>
+            )}
           </div>
         )}
       </div>

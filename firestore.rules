@@ -2,71 +2,51 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() {
-      return request.auth != null;
-    }
-
+    function signedIn() { return request.auth != null; }
+    
     function userDoc() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function isActiveUser() {
-      return signedIn()
-        && userDoc().ativo == true;
+    function isActive() {
+      return signedIn() && userDoc().ativo == true;
     }
 
+    // Perfil SUPER: Gere tudo
     function isAdmin() {
-      return signedIn()
-        && userDoc().role == "ADMIN"
-        && userDoc().ativo == true;
+      return isActive() && userDoc().role == "ADMIN";
     }
 
-    // Perfis
+    // Perfil GESTÃO: Gere material e requisições (ADMIN também pode)
+    function isGestor() {
+      return isActive() && (userDoc().role == "ADMIN" || userDoc().role == "GESTOR");
+    }
+
+    // Utilizadores: Gerido APENAS pelo ADMIN
     match /users/{uid} {
-      allow read: if isAdmin() || (signedIn() && request.auth.uid == uid);
+      allow read: if isGestor() || (signedIn() && request.auth.uid == uid);
       allow write: if isAdmin();
     }
 
-    // Utilizações: todos os utilizadores ativos podem ler (para filtros)
-    match /utilizacoes/{id} {
-      allow read: if isActiveUser();
-      allow write: if false;
-    }
-
-    // Tipos: utilizador ativo lê; admin escreve
-    match /tipos/{id} {
-      allow read: if isActiveUser();
-      allow write: if isAdmin();
-    }
-
-    // Inventário: utilizador ativo lê; admin escreve
+    // Inventário: USER lê; GESTOR escreve
     match /equipamentos/{id} {
-      allow read: if isActiveUser();
-      allow write: if isAdmin();
+      allow read: if isActive();
+      allow write: if isGestor();
     }
 
-    // Eventos por equipamento (ADMIN apenas)
-    match /eventosEquipamento/{id} {
-      allow read, write: if isAdmin();
-    }
-
-    // Requisições (USER cria e vê as suas; ADMIN vê tudo)
+    // Requisições: USER cria/vê as suas; GESTOR gere todas
     match /requisicoes/{rid} {
-      allow create: if isActiveUser();
-      allow read: if isAdmin()
-        || (isActiveUser() && resource.data.criadaPorUid == request.auth.uid);
-      allow update, delete: if isAdmin();
-
+      allow create: if isActive();
+      allow read: if isGestor() || (isActive() && resource.data.criadaPorUid == request.auth.uid);
+      allow update: if isGestor();
+      
       match /itens/{iid} {
-        allow create, read: if isAdmin()
-          || (isActiveUser()
-              && get(/databases/$(database)/documents/requisicoes/$(rid)).data.criadaPorUid == request.auth.uid);
-        allow update, delete: if isAdmin();
-      }
-
-      match /alocacoes/{aid} {
-        allow read, write: if isAdmin();
+        allow read, write: if isGestor() || (isActive() && get(/databases/$(database)/documents/requisicoes/$(rid)).data.criadaPorUid == request.auth.uid);
       }
     }
+    
+    // Outras coleções (tipos, utilizacoes, etc)
+    match /{path=**}/tipos/{id} { allow read: if isActive(); allow write: if isGestor(); }
+    match /{path=**}/utilizacoes/{id} { allow read: if isActive(); allow write: if isGestor(); }
   }
 }
