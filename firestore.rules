@@ -35,9 +35,10 @@ service cloud.firestore {
 
     // --- REGRAS POR COLECÇÃO ---
 
-    // Utilizadores: Apenas ADMIN gere. Gestores e o próprio lêem.
+    // Utilizadores: Alterado para permitir que membros ATIVOS leiam a coleção.
+    // Necessário para que a query de notificações (procurar emails de ADMIN/GESTOR) funcione
     match /users/{uid} {
-      allow read: if isGestor() || (signedIn() && request.auth.uid == uid);
+      allow read: if isActive(); 
       allow write: if isAdmin();
     }
 
