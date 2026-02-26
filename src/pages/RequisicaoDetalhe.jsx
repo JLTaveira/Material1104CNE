@@ -127,6 +127,51 @@ export default function RequisicaoDetalhe() {
     } catch (err) { console.error("Erro EmailJS:", err); return false; }
   }
 
+  async function handleAnulacao() {
+      // 1. Justificação obrigatória
+      const motivo = window.prompt("Indique o motivo da anulação (obrigatório):");
+      
+      if (!motivo || motivo.trim() === "") {
+        alert("É obrigatório indicar um motivo para anular.");
+        return;
+      }
+
+      if (!window.confirm("Tem a certeza que deseja ANULAR este pedido? Os equipamentos serão libertados.")) return;
+
+      const gestor = profile?.nome || "Gestor";
+      const agora = new Date();
+      const batch = writeBatch(db);
+
+      try {
+        // 2. Atualizar pedido para ANULADA
+        batch.update(doc(db, "requisicoes", id), {
+          estado: "ANULADA",
+          anuladaPorNome: gestor,
+          anuladaEm: serverTimestamp(),
+          motivoAnulacao: motivo,
+          atualizadoEm: serverTimestamp()
+        });
+
+        // 3. Libertar equipamentos (Voltar a DISPONÍVEL)
+        itens.forEach(it => {
+          batch.update(doc(db, "equipamentos", it.equipamentoId), {
+            estado: "DISPONIVEL"
+          });
+        });
+
+        await batch.commit();
+
+        // 4. Notificar via e-mail
+        await dispararEmailEstado("ANULADA", gestor, agora);
+
+        alert("Requisição anulada com sucesso.");
+        load();
+      } catch (err) {
+        console.error(err);
+        alert("Erro ao anular.");
+      }
+    }
+
   // --- MUDAR ESTADO (CORRIGIDA) ---
   async function handleMudarEstado(novo) {
     const agora = new Date();
@@ -262,7 +307,20 @@ export default function RequisicaoDetalhe() {
         </div>
         <div className="row" style={{ gap: 10 }}>
           <button className="btn-secondary" onClick={() => navigate("/admin")}>Voltar</button>
-          {req?.estado === "SUBMETIDA" && <button className="btn" onClick={() => handleMudarEstado("EM_PREPARACAO")}>Começar Preparação</button>}
+          {req?.estado === "SUBMETIDA" && (
+            <>
+              <button 
+                className="btn" 
+                style={{ background: '#fee2e2', color: '#991b1b', border: '1px solid #fecaca', marginRight: 10 }} 
+                onClick={handleAnulacao}
+              >
+                Anular Pedido
+              </button>
+              <button className="btn" onClick={() => handleMudarEstado("EM_PREPARACAO")}>
+                Começar Preparação
+              </button>
+            </>
+          )}
           {req?.estado === "EM_PREPARACAO" && <button className="btn" onClick={() => handleMudarEstado("PRONTA")}>Marcar PRONTA</button>}
           {req?.estado === "PRONTA" && (
             <>
@@ -288,9 +346,19 @@ export default function RequisicaoDetalhe() {
         </div>
         <div className="card">
           <h4 className="h4" style={{borderBottom: '1px solid #eee', paddingBottom: 8, marginBottom: 12}}>Registos (Gestão)</h4>
-          <p><b>Preparada por:</b> {req?.preparadaPorNome || "—"} {req?.preparadaEm && <small>({fmtTS(req.preparadaEm)})</small>}</p>
-          <p><b>Entregue por:</b> {req?.recebidaPorNome || "—"} {req?.recebidaEm && <small>({fmtTS(req.recebidaEm)})</small>}</p>
-          <p><b>Rececionada por:</b> {req?.rececionadaPorNome || "—"} {req?.rececionadaEm && <small>({fmtTS(req.rececionadaEm)})</small>}</p>
+          
+          {req?.estado === "ANULADA" ? (
+            <div style={{ color: '#b91c1c' }}>
+              <p><b>Anulado por:</b> {req?.anuladaPorNome} ({fmtTS(req?.anuladaEm)})</p>
+              <p style={{ marginTop: 8 }}><b>Motivo:</b> {req?.motivoAnulacao}</p>
+            </div>
+          ) : (
+            <>
+              <p><b>Preparada por:</b> {req?.preparadaPorNome || "—"} {req?.preparadaEm && <small>({fmtTS(req.preparadaEm)})</small>}</p>
+              <p><b>Entregue por:</b> {req?.recebidaPorNome || "—"} {req?.recebidaEm && <small>({fmtTS(req.recebidaEm)})</small>}</p>
+              <p><b>Rececionada por:</b> {req?.rececionadaPorNome || "—"} {req?.rececionadaEm && <small>({fmtTS(req.rececionadaEm)})</small>}</p>
+            </>
+          )}
         </div>
       </div>
 
