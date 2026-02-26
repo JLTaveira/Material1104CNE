@@ -3,448 +3,531 @@
  2026-02-14 - Joao Taveira (jltaveira@gmail.com) */
  
 import { useEffect, useMemo, useState } from "react";
+
 import AppLayout from "../layouts/AppLayout";
+
 import { useAuth } from "../authContext";
-import { auth } from "../firebase";
-import { db } from "../firebase";
+
+import { auth, db } from "../firebase";
+
 import {
+
   collection,
+
   doc,
+
   getDocs,
+
   limit,
+
   orderBy,
+
   query,
+
   serverTimestamp,
+
   updateDoc,
+
 } from "firebase/firestore";
-import {
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-  sendPasswordResetEmail,
-  updatePassword,
-} from "firebase/auth";
 
-function normEmail(v) {
-  return (v || "").trim().toLowerCase();
+import { sendPasswordResetEmail } from "firebase/auth";
+
+
+
+/* ---------------- Dicionário para Textos Amigáveis ---------------- */
+
+const TEXTO_AMIGAVEL = {
+
+  "ADMIN": "Administrador",
+
+  "GESTOR": "Gestor de Material",
+
+  "USER": "Utilizador (Escuteiro)",
+
+};
+
+
+
+function fmtLabel(val) {
+
+  return TEXTO_AMIGAVEL[val] || val;
+
 }
 
-function validatePwd(pwd) {
-  if (!pwd || pwd.length < 16) return "Password deve ter no mínimo 16 caracteres.";
-  if (!/[a-z]/.test(pwd)) return "Password deve conter pelo menos 1 letra minúscula.";
-  if (!/[A-Z]/.test(pwd)) return "Password deve conter pelo menos 1 letra maiúscula.";
-  if (!/[0-9]/.test(pwd)) return "Password deve conter pelo menos 1 número.";
-  // símbolos comuns (sem espaços)
-  if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pwd))
-    return "Password deve conter pelo menos 1 símbolo.";
-  if (/\s/.test(pwd)) return "Password não pode conter espaços.";
-  return "";
-}
 
-/** Modal confirm “bonito” (igual conceito do inventário) */
-function ConfirmModal({
-  open,
-  title,
-  body,
-  confirmText,
-  cancelText,
-  danger,
-  onCancel,
-  onConfirm,
-  busy,
-}) {
-  if (!open) return null;
 
-  return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true">
-      <div className="modal-card">
-        <div className="modal-header">
-          <div className="modal-title">{title}</div>
-          <button
-            className="modal-x"
-            onClick={onCancel}
-            aria-label="Fechar"
-            disabled={busy}
-            type="button"
-          >
-            ✕
-          </button>
-        </div>
+/* ---------------- Componente: Modal de Edição Completa ---------------- */
 
-        <div className="modal-body">
-          {typeof body === "string" ? (
-            <p style={{ margin: 0, whiteSpace: "pre-line" }}>{body}</p>
-          ) : (
-            body
-          )}
-        </div>
+function EditUserModal({ open, user, onCancel, onSave, busy }) {
 
-        <div className="modal-actions">
-          <button className="btn-secondary" onClick={onCancel} disabled={busy} type="button">
-            {cancelText ?? "Cancelar"}
-          </button>
-          <button
-            className={`btn ${danger ? "btn-danger" : ""}`}
-            onClick={onConfirm}
-            disabled={busy}
-            type="button"
-          >
-            {busy ? "A processar..." : confirmText ?? "Confirmar"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
+  const [formData, setFormData] = useState({
 
-export default function AdminUsers() {
-  const { user, profile } = useAuth();
-  const isAdmin = (profile?.role ?? "USER") === "ADMIN";
+    nome: "",
 
-  const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState([]);
-  const [qText, setQText] = useState("");
-  const [msg, setMsg] = useState("");
+    email: "",
 
-  // Alterar password (admin atual)
-  const [curPass, setCurPass] = useState("");
-  const [newPass, setNewPass] = useState("");
-  const [newPass2, setNewPass2] = useState("");
-  const [savingPass, setSavingPass] = useState(false);
+    role: "USER",
 
-  // modal
-  const [confirm, setConfirm] = useState(null);
-  const [confirmBusy, setConfirmBusy] = useState(false);
+    ativo: true
 
-  function openConfirm({
-    title,
-    body,
-    danger = false,
-    confirmText = "Confirmar",
-    cancelText = "Cancelar",
-    onConfirm,
-  }) {
-    setConfirm({ title, body, danger, confirmText, cancelText, onConfirm });
-  }
-  function closeConfirm() {
-    if (confirmBusy) return;
-    setConfirm(null);
-  }
+  });
 
-  async function loadUsers() {
-    setLoading(true);
-    setMsg("");
-    try {
-      const ref = collection(db, "users");
-      const qs = query(ref, orderBy("nome", "asc"), limit(500));
-      const snap = await getDocs(qs);
-      setRows(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    } catch (e) {
-      console.error(e);
-      setMsg("Erro ao carregar utilizadores (ver consola).");
-    } finally {
-      setLoading(false);
-    }
-  }
+
+
+  // Carrega os dados do utilizador quando o modal abre
 
   useEffect(() => {
-    loadUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
-  const filtered = useMemo(() => {
-    const t = qText.trim().toLowerCase();
-    if (!t) return rows;
-    return rows.filter((u) =>
-      `${u.nome ?? ""} ${u.email ?? ""} ${u.role ?? ""} ${u.id ?? ""}`.toLowerCase().includes(t)
-    );
-  }, [rows, qText]);
+    if (user) {
 
-  async function patchUser(uid, patchObj) {
-    await updateDoc(doc(db, "users", uid), { ...patchObj, atualizadoEm: serverTimestamp() });
-  }
+      setFormData({
 
-  function toggleActive(u) {
-    const uid = u.id;
-    const ativoAtual = !(u.ativo === false);
+        nome: user.nome || "",
 
-    openConfirm({
-      title: "Confirmar alteração — Ativo",
-      body: `Utilizador: ${u.nome ?? "—"}\nEmail: ${u.email ?? "—"}\n\nDe: ${
-        ativoAtual ? "Sim" : "Não"
-      }\nPara: ${ativoAtual ? "Não" : "Sim"}`,
-      danger: ativoAtual, // desativar = mais “perigoso”
-      confirmText: ativoAtual ? "Desativar" : "Ativar",
-      onConfirm: async () => {
-        setConfirmBusy(true);
-        try {
-          await patchUser(uid, { ativo: !ativoAtual });
-          await loadUsers();
-          setConfirm(null);
-        } finally {
-          setConfirmBusy(false);
-        }
-      },
-    });
-  }
+        email: user.email || "",
 
-  function toggleRole(u) {
-    const uid = u.id;
-    const from = u.role ?? "USER";
-    const to = from === "ADMIN" ? "USER" : "ADMIN";
+        role: user.role || "USER",
 
-    openConfirm({
-      title: "Confirmar alteração — Role",
-      body: `Utilizador: ${u.nome ?? "—"}\nEmail: ${u.email ?? "—"}\n\nDe: ${from}\nPara: ${to}`,
-      danger: to === "ADMIN",
-      confirmText: "Aplicar",
-      onConfirm: async () => {
-        setConfirmBusy(true);
-        try {
-          await patchUser(uid, { role: to });
-          await loadUsers();
-          setConfirm(null);
-        } finally {
-          setConfirmBusy(false);
-        }
-      },
-    });
-  }
+        ativo: user.ativo !== false
 
-  function resetPassword(u) {
-    const email = normEmail(u.email);
-    if (!email) {
-      setMsg("Este utilizador não tem email no registo.");
-      return;
+      });
+
     }
 
-    openConfirm({
-      title: "Confirmar — Reset password",
-      body: `Vai ser enviado um email de reposição de password para:\n${email}\n\n(O utilizador define a nova password através do link.)`,
-      confirmText: "Enviar email",
-      onConfirm: async () => {
-        setConfirmBusy(true);
-        setMsg("");
-        try {
-          await sendPasswordResetEmail(auth, email);
-          setMsg(`Email de reposição enviado para ${email}.`);
-          setConfirm(null);
-        } catch (e) {
-          console.error(e);
-          setMsg("Falha ao enviar email de reset (ver consola).");
-        } finally {
-          setConfirmBusy(false);
-        }
-      },
-    });
-  }
+  }, [user, open]);
 
-  async function changeMyPassword(e) {
-    e.preventDefault();
-    setMsg("");
 
-    if (!user?.email) return setMsg("Conta atual sem email — não é possível reautenticar.");
-    if (!curPass) return setMsg("Indica a password atual.");
-    if (newPass !== newPass2) return setMsg("As passwords novas não coincidem.");
 
-    const v = validatePwd(newPass);
-    if (v) return setMsg(v);
+  if (!open || !user) return null;
 
-    setSavingPass(true);
-    try {
-      const cred = EmailAuthProvider.credential(user.email, curPass);
-      await reauthenticateWithCredential(user, cred);
-      await updatePassword(user, newPass);
 
-      setCurPass("");
-      setNewPass("");
-      setNewPass2("");
-      setMsg("Password atualizada com sucesso.");
-    } catch (e2) {
-      console.error(e2);
-      setMsg("Falha a alterar password (pode exigir login recente). Ver consola.");
-    } finally {
-      setSavingPass(false);
-    }
-  }
-
-  if (!isAdmin) {
-    return (
-      <AppLayout>
-        <div className="card" style={{ color: "crimson" }}>
-          Acesso restrito a administradores.
-        </div>
-      </AppLayout>
-    );
-  }
 
   return (
-    <AppLayout>
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <div>
-          <h3 className="h3">Utilizadores</h3>
-          <div style={{ fontSize: 13, opacity: 0.7 }}>
-            Gerir permissões e ativação. Reset de password por email. Alterar password do admin atual.
-          </div>
-        </div>
-        <button className="btn-secondary" onClick={loadUsers} type="button">
-          Recarregar
-        </button>
-      </div>
 
-      {msg ? (
-        <div className="card" style={{ marginTop: 12 }}>
-          {msg}
-        </div>
-      ) : null}
+    <div className="modal-backdrop">
 
-      {/* Minha conta */}
-      <div className="card" style={{ marginTop: 12 }}>
-        <div className="row" style={{ justifyContent: "space-between", marginBottom: 10 }}>
-          <div>
-            <h3 className="h3" style={{ marginBottom: 4 }}>
-              Minha conta
-            </h3>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>Alterar password do admin atual.</div>
-          </div>
+      <div className="modal-card">
+
+        <div className="modal-header">
+
+          <div className="modal-title">Editar Utilizador</div>
+
+          <button className="modal-x" onClick={onCancel} disabled={busy}>✕</button>
+
         </div>
 
-        <form onSubmit={changeMyPassword}>
-          <div className="grid-3">
-            <div>
-              <label className="field-label">Password atual</label>
-              <input
-                className="input"
-                type="password"
-                value={curPass}
-                onChange={(e) => setCurPass(e.target.value)}
-                autoComplete="current-password"
-                placeholder="********"
-              />
-            </div>
+
+
+        <div className="modal-body">
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
 
             <div>
-              <label className="field-label">Nova password</label>
+
+              <label className="field-label" style={{display: "block", marginBottom: "4px", fontSize: "12px", opacity: 0.8}}>Nome Completo</label>
+
               <input
+
                 className="input"
-                type="password"
-                value={newPass}
-                onChange={(e) => setNewPass(e.target.value)}
-                autoComplete="new-password"
-                placeholder="********"
+
+                style={{width: "100%"}}
+
+                value={formData.nome}
+
+                onChange={e => setFormData({...formData, nome: e.target.value})}
+
               />
+
             </div>
+
+           
 
             <div>
-              <label className="field-label">Confirmar nova password</label>
+
+              <label className="field-label" style={{display: "block", marginBottom: "4px", fontSize: "12px", opacity: 0.8}}>Email (Apenas consulta na BD)</label>
+
               <input
+
                 className="input"
-                type="password"
-                value={newPass2}
-                onChange={(e) => setNewPass2(e.target.value)}
-                autoComplete="new-password"
-                placeholder="********"
+
+                style={{width: "100%"}}
+
+                value={formData.email}
+
+                onChange={e => setFormData({...formData, email: e.target.value})}
+
               />
+
+              <small style={{fontSize: "11px", opacity: 0.6}}>Nota: Alterar o email aqui não altera o login no Auth.</small>
+
             </div>
+
+
+
+            <div className="row">
+
+              <div style={{flex: 1}}>
+
+                <label className="field-label" style={{display: "block", marginBottom: "4px", fontSize: "12px", opacity: 0.8}}>Perfil de Acesso</label>
+
+                <select
+
+                  className="select"
+
+                  style={{width: "100%"}}
+
+                  value={formData.role}
+
+                  onChange={e => setFormData({...formData, role: e.target.value})}
+
+                >
+
+                  <option value="USER">Utilizador (USER)</option>
+
+                  <option value="GESTOR">Gestor Material (GESTOR)</option>
+
+                  <option value="ADMIN">Administrador (ADMIN)</option>
+
+                </select>
+
+              </div>
+
+
+
+              <div style={{flex: 1}}>
+
+                <label className="field-label" style={{display: "block", marginBottom: "4px", fontSize: "12px", opacity: 0.8}}>Estado da Conta</label>
+
+                <select
+
+                  className="select"
+
+                  style={{width: "100%"}}
+
+                  value={formData.ativo}
+
+                  onChange={e => setFormData({...formData, ativo: e.target.value === "true"})}
+
+                >
+
+                  <option value="true">Conta Ativa</option>
+
+                  <option value="false">Conta Suspensa</option>
+
+                </select>
+
+              </div>
+
+            </div>
+
           </div>
 
-          <div className="hint" style={{ marginTop: 10 }}>
-            Regras: <b>16+</b> caracteres, <b>maiúsculas</b>, <b>minúsculas</b>, <b>número</b> e{" "}
-            <b>símbolo</b>. Sem espaços.
-          </div>
-
-          <div className="row" style={{ justifyContent: "flex-end", marginTop: 12 }}>
-            <button className="btn" type="submit" disabled={savingPass}>
-              {savingPass ? "A alterar..." : "Alterar password"}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Lista */}
-      <div className="card" style={{ marginTop: 12 }}>
-        <div className="row" style={{ justifyContent: "space-between" }}>
-          <h3 className="h3">Lista</h3>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>
-            {loading ? "A carregar..." : `${filtered.length} utilizadores`}
-          </div>
         </div>
 
-        <div className="row" style={{ marginTop: 10 }}>
-          <input
-            className="input"
-            style={{ minWidth: 320 }}
-            value={qText}
-            onChange={(e) => setQText(e.target.value)}
-            placeholder="Pesquisar (nome, email, role...)"
-          />
-          <button className="btn-secondary" onClick={() => setQText("")} type="button">
-            Limpar
+
+
+        <div className="modal-actions">
+
+          <button className="btn-secondary" onClick={onCancel} disabled={busy}>Cancelar</button>
+
+          <button className="btn" onClick={() => onSave(user.id, formData)} disabled={busy}>
+
+            {busy ? "A gravar..." : "Guardar Alterações"}
+
           </button>
+
         </div>
 
-        <div className="table-wrap" style={{ marginTop: 12 }}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Nome</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Ativo</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={5}>A carregar...</td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={5}>Sem resultados.</td>
-                </tr>
-              ) : (
-                filtered.map((u) => (
-                  <tr key={u.id}>
-                    <td>{u.nome ?? "—"}</td>
-                    <td className="mono">{u.email ?? "—"}</td>
-                    <td>
-                      <span className="chip">{u.role ?? "USER"}</span>
-                    </td>
-                    <td>{u.ativo === false ? "Não" : "Sim"}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>
-                      <button className="btn-secondary" onClick={() => toggleActive(u)} type="button">
-                        {u.ativo === false ? "Ativar" : "Desativar"}
-                      </button>{" "}
-                      <button className="btn-secondary" onClick={() => toggleRole(u)} type="button">
-                        {u.role === "ADMIN" ? "Tornar USER" : "Tornar ADMIN"}
-                      </button>{" "}
-                      <button className="btn" onClick={() => resetPassword(u)} type="button">
-                        Reset password
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div style={{ fontSize: 12, opacity: 0.7, marginTop: 10 }}>
-          Nota: o “Ativo” aqui é o acesso à <b>plataforma</b> (via Firestore). O reset envia email pelo Firebase Auth.
-        </div>
       </div>
 
-      <ConfirmModal
-        open={!!confirm}
-        title={confirm?.title}
-        body={confirm?.body}
-        confirmText={confirm?.confirmText}
-        cancelText={confirm?.cancelText}
-        danger={confirm?.danger}
-        busy={confirmBusy}
-        onCancel={closeConfirm}
-        onConfirm={confirm?.onConfirm}
-      />
-    </AppLayout>
+    </div>
+
   );
+
+}
+
+
+
+/* ---------------- Página Principal ---------------- */
+
+export default function AdminUsers() {
+
+  const { profile } = useAuth();
+
+  const isAdmin = profile?.role === "ADMIN";
+
+
+
+  const [loading, setLoading] = useState(true);
+
+  const [rows, setRows] = useState([]);
+
+  const [qText, setQText] = useState("");
+
+  const [msg, setMsg] = useState("");
+
+
+
+  // Estados dos Modais
+
+  const [editingUser, setEditingUser] = useState(null);
+
+  const [saveBusy, setSaveBusy] = useState(false);
+
+
+
+  async function loadUsers() {
+
+    setLoading(true);
+
+    try {
+
+      const ref = collection(db, "users");
+
+      const qs = query(ref, orderBy("nome", "asc"), limit(500));
+
+      const snap = await getDocs(qs);
+
+      setRows(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+
+    } catch (e) {
+
+      setMsg("Erro ao carregar utilizadores.");
+
+    } finally {
+
+      setLoading(false);
+
+    }
+
+  }
+
+
+
+  useEffect(() => { loadUsers(); }, []);
+
+
+
+  const filtered = useMemo(() => {
+
+    const t = qText.trim().toLowerCase();
+
+    if (!t) return rows;
+
+    return rows.filter((u) =>
+
+      `${u.nome ?? ""} ${u.email ?? ""} ${u.role ?? ""}`.toLowerCase().includes(t)
+
+    );
+
+  }, [rows, qText]);
+
+
+
+  /** Grava as alterações do modal no Firestore */
+
+  async function handleUpdateUser(uid, updatedData) {
+
+    setSaveBusy(true);
+
+    try {
+
+      const ref = doc(db, "users", uid);
+
+      const patch = {
+
+        ...updatedData,
+
+        atualizadoEm: serverTimestamp()
+
+      };
+
+      await updateDoc(ref, patch);
+
+     
+
+      // Atualiza a lista local para refletir as mudanças instantaneamente
+
+      setRows(prev => prev.map(r => r.id === uid ? { ...r, ...patch } : r));
+
+      setEditingUser(null);
+
+      setMsg(`Utilizador ${updatedData.nome} atualizado.`);
+
+    } catch (e) {
+
+      alert("Erro ao guardar alterações.");
+
+    } finally {
+
+      setSaveBusy(false);
+
+    }
+
+  }
+
+
+
+  function handleResetPassword(u) {
+
+    if (!u.email) return alert("Utilizador sem email registado.");
+
+    if (window.confirm(`Enviar email de recuperação para ${u.email}?`)) {
+
+      sendPasswordResetEmail(auth, u.email)
+
+        .then(() => setMsg("Email de reset enviado."))
+
+        .catch(() => alert("Erro ao enviar email."));
+
+    }
+
+  }
+
+
+
+  if (!isAdmin) return <AppLayout><div className="card">Acesso restrito.</div></AppLayout>;
+
+
+
+  return (
+
+    <AppLayout>
+
+      <div className="row" style={{ justifyContent: "space-between" }}>
+
+        <div>
+
+          <h3 className="h3">Gestão de Utilizadores</h3>
+
+          <div style={{ fontSize: 13, opacity: 0.7 }}>Controlo centralizado de perfis, dados e acessos.</div>
+
+        </div>
+
+        <button className="btn-secondary" onClick={loadUsers}>Recarregar</button>
+
+      </div>
+
+
+
+      {msg && <div className="card" style={{ marginTop: 12, backgroundColor: "#f0fdf4", borderColor: "#bbf7d0", color: "#166534" }}>{msg}</div>}
+
+
+
+      <div className="card" style={{ marginTop: 12 }}>
+
+        <input
+
+          className="input"
+
+          style={{ width: "100%", marginBottom: "12px" }}
+
+          placeholder="Pesquisar utilizadores..."
+
+          value={qText}
+
+          onChange={(e) => setQText(e.target.value)}
+
+        />
+
+
+
+        <div className="table-wrap">
+
+          <table className="table">
+
+            <thead>
+
+              <tr>
+
+                <th>Nome</th>
+
+                <th>Email</th>
+
+                <th>Cargo / Perfil</th>
+
+                <th>Estado</th>
+
+                <th style={{textAlign: "right"}}>Ações</th>
+
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              {loading ? (
+
+                <tr><td colSpan={5}>A carregar...</td></tr>
+
+              ) : (
+
+                filtered.map((u) => (
+
+                  <tr key={u.id}>
+
+                    <td style={{fontWeight: 600}}>{u.nome ?? "—"}</td>
+
+                    <td className="mono" style={{fontSize: "13px"}}>{u.email ?? "—"}</td>
+
+                    <td><span className="chip">{fmtLabel(u.role)}</span></td>
+
+                    <td>
+
+                      <span className={`chip ${u.ativo === false ? 'chip-can' : 'chip-dev'}`}>
+
+                        {u.ativo === false ? "Inativo" : "Ativo"}
+
+                      </span>
+
+                    </td>
+
+                    <td style={{ whiteSpace: "nowrap", textAlign: "right" }}>
+
+                      <button className="btn-secondary" onClick={() => setEditingUser(u)}>
+
+                        Editar
+
+                      </button>{" "}
+
+                      <button className="btn" onClick={() => handleResetPassword(u)}>Reset Pwd</button>
+
+                    </td>
+
+                  </tr>
+
+                ))
+
+              )}
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+
+
+      {/* Modal de Edição (Só renderiza se houver um user selecionado) */}
+
+      <EditUserModal
+
+        open={!!editingUser}
+
+        user={editingUser}
+
+        onCancel={() => setEditingUser(null)}
+
+        onSave={handleUpdateUser}
+
+        busy={saveBusy}
+
+      />
+
+    </AppLayout>
+
+  );
+
 }

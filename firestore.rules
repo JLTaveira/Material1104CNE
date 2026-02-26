@@ -2,39 +2,57 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function signedIn() { return request.auth != null; }
+    // --- FUNÇÕES DE VALIDAÇÃO HÍBRIDAS (Token ou Base de Dados) ---
     
-    function userDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    function signedIn() { 
+      return request.auth != null; 
+    }
+    
+    // Verifica se o utilizador está ativo (no Token ou na BD se o token estiver vazio)
+    function isActive() { 
+      return signedIn() && (
+        request.auth.token.ativo == true || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.ativo == true
+      ); 
     }
 
-    function isActive() {
-      return signedIn() && userDoc().ativo == true;
+    // Perfil ADMIN: Verifica role no Token ou na BD
+    function isAdmin() { 
+      return isActive() && (
+        request.auth.token.role == "ADMIN" || 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN"
+      ); 
     }
 
-    // Perfil SUPER: Gere tudo
-    function isAdmin() {
-      return isActive() && userDoc().role == "ADMIN";
+    // Perfil GESTOR: Verifica role no Token ou na BD
+    function isGestor() { 
+      return isActive() && (
+        request.auth.token.role == "ADMIN" || request.auth.token.role == "GESTOR" ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "ADMIN" ||
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "GESTOR"
+      ); 
     }
 
-    // Perfil GESTÃO: Gere material e requisições (ADMIN também pode)
-    function isGestor() {
-      return isActive() && (userDoc().role == "ADMIN" || userDoc().role == "GESTOR");
-    }
+    // --- REGRAS POR COLECÇÃO ---
 
-    // Utilizadores: Gerido APENAS pelo ADMIN
+    // Utilizadores: Apenas ADMIN gere. Gestores e o próprio lêem.
     match /users/{uid} {
       allow read: if isGestor() || (signedIn() && request.auth.uid == uid);
       allow write: if isAdmin();
     }
 
-    // Inventário: USER lê; GESTOR escreve
+    // Configurações de Email: Acesso EXCLUSIVO ao ADMIN
+    match /config/email {
+      allow read, write: if isAdmin();
+    }
+
+    // Inventário: Ativos lêem; Gestores/Admins escrevem
     match /equipamentos/{id} {
       allow read: if isActive();
       allow write: if isGestor();
     }
 
-    // Requisições: USER cria/vê as suas; GESTOR gere todas
+    // Requisições
     match /requisicoes/{rid} {
       allow create: if isActive();
       allow read: if isGestor() || (isActive() && resource.data.criadaPorUid == request.auth.uid);
@@ -45,8 +63,18 @@ service cloud.firestore {
       }
     }
     
-    // Outras coleções (tipos, utilizacoes, etc)
-    match /{path=**}/tipos/{id} { allow read: if isActive(); allow write: if isGestor(); }
-    match /{path=**}/utilizacoes/{id} { allow read: if isActive(); allow write: if isGestor(); }
+    // Taxonomias (Tipos e Utilizações)
+    match /utilizacoes/{id} { allow read: if isActive(); allow write: if isGestor(); }
+    match /tipos/{id} { allow read: if isActive(); allow write: if isGestor(); }
+
+    // Logs e Eventos
+    match /eventosEquipamento/{id} {
+      allow read, write: if isGestor();
+    }
+    
+    // Coleção para Trigger de Emails (se usares a extensão)
+    match /mail/{id} {
+      allow create: if isActive();
+    }
   }
 }

@@ -2,172 +2,119 @@
  functions/index.js
  2026-02-14 - Joao Taveira (jltaveira@gmail.com) */
 
+/* functions/index.js */
+/* Firebase Cloud Functions - Alforge 1104
+  Versão: 3.0 (Logística + Gestão de Utilizadores)
+  Região: europe-southwest1 (Madrid)
+  2026-02-25
+*/
+
 const { setGlobalOptions } = require("firebase-functions/v2");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
+const nodemailer = require("nodemailer");
 
 admin.initializeApp();
 
-// Mantém isto para controlo de custos (ok no teu caso)
-setGlobalOptions({ maxInstances: 10 });
+// Configurações Globais (Madrid)
+setGlobalOptions({ region: "europe-southwest1", maxInstances: 10 });
+
+const GERAL_1104 = "geral.1104@escutismo.pt";
+
+/* --- AUXILIARES --- */
+async function getMailer() {
+  const snap = await admin.firestore().collection("config").doc("email").get();
+  if (!snap.exists || !snap.data().ativo) return null;
+  const cfg = snap.data();
+  return nodemailer.createTransport({
+    host: cfg.host || "smtp.gmail.com",
+    port: cfg.port || 465,
+    secure: true,
+    auth: { user: cfg.user, pass: cfg.pass }
+  });
+}
 
 function assertAdmin(request) {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Precisas de estar autenticado.");
-  }
-  const claims = request.auth.token || {};
-  if (claims.role !== "ADMIN") {
-    throw new HttpsError("permission-denied", "Apenas ADMIN pode executar esta operação.");
+  if (!request.auth || request.auth.token.role !== "ADMIN") {
+    throw new HttpsError("permission-denied", "Acesso restrito a Administradores.");
   }
 }
 
-exports.adminCreateUser = onCall(async (request) => {
-  assertAdmin(request);
+/* --- LOGÍSTICA DE EMAILS --- */
 
-  const email = (request.data.email || "").trim().toLowerCase();
-  const nome = (request.data.nome || "").trim();
-  const role = (request.data.role || "USER").toUpperCase();
-  const password = request.data.password || "";
+exports.onNovaRequisicao = onDocumentCreated("requisicoes/{id}", async (event) => {
+  const req = event.data.data();
+  const mailer = await getMailer();
+  if (!mailer) return null;
 
-  if (!email || !nome) {
-    throw new HttpsError("invalid-argument", "email e nome são obrigatórios.");
-  }
-  if (!["ADMIN", "USER"].includes(role)) {
-    throw new HttpsError("invalid-argument", "role inválido.");
-  }
-  if (!password || password.length < 16) {
-    throw new HttpsError("invalid-argument", "Password temporária deve ter pelo menos 16 caracteres.");
-  }
+  const staff = await admin.firestore().collection("users")
+    .where("role", "in", ["ADMIN", "GESTOR"]).where("ativo", "==", true).get();
+  
+  const bcc = [GERAL_1104];
+  staff.forEach(d => { if(d.data().email) bcc.push(d.data().email); });
 
-  // criar no Firebase Auth
-  const userRecord = await admin.auth().createUser({
-    email,
-    password,
-    displayName: nome,
-    disabled: false,
+  return mailer.sendMail({
+    from: `"Alforge 1104" <${GERAL_1104}>`,
+    to: GERAL_1104,
+    bcc: bcc.join(","),
+    subject: `📦 [SUBMETIDA] Nova Requisição - ${req.criadaPorNome}`,
+    text: `Uma nova requisição foi submetida.\nUtilizador: ${req.criadaPorNome}\nDatas: ${req.dataInicio} a ${req.dataFim}\nObs: ${req.observacoes || "-"}`
   });
-
-  // Custom claim role (para controlo de acesso na app)
-  await admin.auth().setCustomUserClaims(userRecord.uid, { role });
-
-  // users/{uid} no Firestore
-  await admin.firestore().collection("users").doc(userRecord.uid).set(
-    {
-      email,
-      nome,
-      role,
-      ativo: true,
-      criadoEm: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
-
-  return { uid: userRecord.uid };
 });
 
-exports.adminSetUserRole = onCall(async (request) => {
-  assertAdmin(request);
+exports.onUpdateRequisicao = onDocumentUpdated("requisicoes/{id}", async (event) => {
+  const novo = event.data.after.data();
+  const antigo = event.data.before.data();
+  if (novo.estado === antigo.estado) return null;
 
-  const uid = request.data.uid;
-  const role = (request.data.role || "USER").toUpperCase();
+  const mailer = await getMailer();
+  if (!mailer) return null;
 
-  if (!uid) throw new HttpsError("invalid-argument", "uid obrigatório.");
-  if (!["ADMIN", "USER"].includes(role)) throw new HttpsError("invalid-argument", "role inválido.");
+  let subject = "";
+  let body = "";
 
-  await admin.auth().setCustomUserClaims(uid, { role });
+  if (novo.estado === "PRONTA") {
+    subject = "✅ Material Pronto para Levantamento";
+    body = `Olá ${novo.criadaPorNome},\n\nO teu pedido foi preparado por ${novo.preparadaPorNome} e já está disponível para levantamento.\n\nCumps, Equipa de Material.`;
+  } else if (novo.estado === "DEVOLVIDA") {
+    subject = "📥 Confirmação de Receção de Material";
+    body = `Olá ${novo.criadaPorNome},\n\nO material foi recebido e conferido por ${novo.recebidaPorNome}.\nObrigado pela devolução!`;
+  }
 
-  await admin.firestore().collection("users").doc(uid).set(
-    {
-      role,
-      atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
+  if (!subject) return null;
 
-  return { ok: true };
+  const uSnap = await admin.firestore().collection("users").doc(novo.criadaPorUid).get();
+  const emailDest = uSnap.data()?.email;
+  if (!emailDest) return null;
+
+  return mailer.sendMail({
+    from: `"Alforge 1104" <${GERAL_1104}>`,
+    to: emailDest,
+    cc: GERAL_1104,
+    replyTo: GERAL_1104,
+    subject: subject,
+    text: body
+  });
 });
 
-exports.adminSetUserActive = onCall(async (request) => {
+/* --- GESTÃO DE UTILIZADORES --- */
+
+exports.adminUpdateUser = onCall(async (request) => {
   assertAdmin(request);
-
-  const uid = request.data.uid;
-  const ativo = !!request.data.ativo;
-
-  if (!uid) throw new HttpsError("invalid-argument", "uid obrigatório.");
-
-  // Se ativo=false, desativa login no Auth
-  await admin.auth().updateUser(uid, { disabled: !ativo });
-
-  await admin.firestore().collection("users").doc(uid).set(
-    {
-      ativo,
-      atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
-
+  const { uid, nome, email, role, ativo } = request.data;
+  await admin.auth().updateUser(uid, { displayName: nome, email: email, disabled: !ativo });
+  await admin.auth().setCustomUserClaims(uid, { role, ativo });
+  if (!ativo) await admin.auth().revokeRefreshTokens(uid);
+  await admin.firestore().collection("users").doc(uid).update({
+    nome, email, role, ativo, atualizadoEm: admin.firestore.FieldValue.serverTimestamp()
+  });
   return { ok: true };
 });
 
 exports.bootstrapMakeAdmin = onCall(async (request) => {
-  // 🔒 Para segurança: só permite um email que será o SUPERADMIN
-  const allowedEmail = "jltaveira@gmail.com";
-
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "Precisas de login.");
-  }
-
-  const email = (request.auth.token.email || "").toLowerCase();
-  if (email !== allowedEmail.toLowerCase()) {
-    throw new HttpsError("permission-denied", "Não autorizado.");
-  }
-
-  const uid = request.auth.uid;
-
-  await admin.auth().setCustomUserClaims(uid, { role: "ADMIN" });
-
-  await admin.firestore().collection("users").doc(uid).set(
-    {
-      email: request.auth.token.email || "",
-      role: "ADMIN",
-      ativo: true,
-      atualizadoEm: admin.firestore.FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
-
-  return { ok: true, uid };
+  const allowed = "jltaveira@gmail.com";
+  if (!request.auth || request.auth.token.email !== allowed) throw new HttpsError("permission-denied", "Proibido.");
+  await admin.auth().setCustomUserClaims(request.auth.uid, { role: "ADMIN", ativo: true });
+  return { ok: true };
 });
-
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- 
-
-const {setGlobalOptions} = require("firebase-functions");
-const {onRequest} = require("firebase-functions/https");
-const logger = require("firebase-functions/logger");
-
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
-
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
-
-// exports.helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// }); */

@@ -17,46 +17,32 @@ export default function AppLayout({ children }) {
 
   const role = profile?.role ?? "USER";
   const isAdmin = role === "ADMIN";
-
   const [mobileOpen, setMobileOpen] = useState(false);
 
-const nav = useMemo(() => {
-  const role = profile?.role;
-  const items = [
-    { to: "/", label: "Início" },
-    { to: "/inventario", label: "Consultar Inventário" },
-  ];
+  const navItems = useMemo(() => {
+    const items = [
+      { to: "/", label: "Início" },
+      { to: "/inventario", label: "Consultar Inventário" },
+    ];
+    if (role === "ADMIN" || role === "GESTOR") {
+      items.push({ to: "/admin", label: "Dashboard Material" });
+      items.push({ to: "/admin/inventario", label: "Gestão Inventário" });
+      items.push({ to: "/admin/requisicoes", label: "Gestão Requisições" });
+    }
+    if (role === "ADMIN") {
+      items.push({ to: "/admin/users", label: "Utilizadores" });
+      items.push({ to: "/admin/settings", label: "Configurações" });
+    }
+    return items;
+  }, [role]);
 
-  // Se for GESTOR ou ADMIN, vê ferramentas de material
-  if (role === "ADMIN" || role === "GESTOR") {
-    items.push({ to: "/admin", label: "Dashboard Material" });
-    items.push({ to: "/admin/inventario", label: "Gestão Inventário" });
-    items.push({ to: "/admin/requisicoes", label: "Gestão Requisições" });
-  }
-
-  // APENAS ADMIN vê utilizadores
-  if (role === "ADMIN") {
-    items.push({ to: "/admin/users", label: "Utilizadores" });
-  }
-
-  return items;
-}, [profile]);
-
-  function active(to) {
+  function isActive(to) {
     return loc.pathname === to || (to !== "/" && loc.pathname.startsWith(to));
-  }
-
-  function onNavClick() {
-    setMobileOpen(false);
   }
 
   return (
     <div className="app-shell">
-      {/* Overlay mobile */}
-      <div
-        className={`mobile-overlay ${mobileOpen ? "open" : ""}`}
-        onClick={() => setMobileOpen(false)}
-      />
+      <div className={`mobile-overlay ${mobileOpen ? "open" : ""}`} onClick={() => setMobileOpen(false)} />
 
       <aside className={`sidebar ${mobileOpen ? "open" : ""}`}>
         <div className="brand">
@@ -68,57 +54,34 @@ const nav = useMemo(() => {
         </div>
 
         <nav className="nav">
-          {nav.map((n) => (
-            <Link
-              key={n.to}
-              to={n.to}
-              onClick={onNavClick}
-              className={`nav-link ${active(n.to) ? "active" : ""}`}
-            >
+          {navItems.map((n) => (
+            <Link key={n.to} to={n.to} onClick={() => setMobileOpen(false)} className={`nav-link ${isActive(n.to) ? "active" : ""}`}>
               {n.label}
             </Link>
           ))}
         </nav>
 
+        {/* FOOTER ORIGINAL COM BOTÃO GHOST (Imagem 3 e 4) */}
         <div className="sidebar-footer">
           <div className="user-chip">
-            <img className="user-avatar" src={eqMaterial} alt="Equipa Material" />
+            <img className="user-avatar" src={eqMaterial} alt="Avatar" />
             <div>
               <div className="user-name">{profile?.nome ?? "Utilizador"}</div>
               <div className="user-role">{role}</div>
             </div>
           </div>
-
-          <button className="btn-ghost" onClick={() => signOut(auth)}>
-            Sair
-          </button>
+          <button className="btn-ghost" onClick={() => signOut(auth)}>Sair</button>
         </div>
       </aside>
 
       <main className="main">
         <div className="topbar">
           <div className="topbar-left">
-            <button
-              className="icon-btn mobile-only"
-              onClick={() => setMobileOpen(true)}
-              aria-label="Abrir menu"
-              title="Menu"
-            >
-              ☰
-            </button>
-
+            <button className="icon-btn mobile-only" onClick={() => setMobileOpen(true)}>☰</button>
             <div>{isAdmin ? "Administração" : "Área do Utilizador"}</div>
           </div>
-
           <div className="topbar-right">
             <div className="topbar-meta">CNE · Agrupamento 1104</div>
-            <button
-              className="btn-ghost mobile-only"
-              onClick={() => signOut(auth)}
-              style={{ marginLeft: 8 }}
-            >
-              Sair
-            </button>
           </div>
         </div>
 
