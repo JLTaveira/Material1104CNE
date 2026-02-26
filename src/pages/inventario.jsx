@@ -137,54 +137,186 @@ export default function Inventario() {
         </div>
       </div>
 
-      {/* --- NOVO DESIGN: FORMULÁRIO "NOVO" --- */}
+      {/* --- FORMULÁRIO "NOVO" --- */}
       {showNovo && (
-        <div className="card" style={{ marginBottom: 35, border: '1px solid #3b82f6', background: '#fff', padding: 0, overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)' }}>
-          <div style={{ background: '#f8fafc', padding: '15px 25px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontWeight: '600', color: '#1e293b', fontSize: 15 }}>Registo de Novo Equipamento</span>
-            <span style={{ background: '#dbeafe', color: '#1e40af', padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 'bold' }}>CÓDIGO: {novo.codigoCompleto || "---"}</span>
+        <div className="equip-form">
+          <div className="equip-form__header">
+            <div>
+              <div className="equip-form__title">Registo de Novo Equipamento</div>
+              <div className="equip-form__subtitle">
+                Preenche os dados principais do material. Podes editar mais tarde.
+              </div>
+            </div>
+            <div className="equip-form__code">
+              <span className="equip-form__code-label">CÓDIGO</span>
+              <span className="equip-form__code-value">{novo.codigoCompleto || "---"}</span>
+            </div>
           </div>
-          
-          <div style={{ padding: '25px' }}>
-            {/* Bloco 1: Identidade */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 20, marginBottom: 25 }}>
-              <div><label className="label">Utilização</label>
-                <select className="select" value={novo.utilizacaoCodigo} onChange={e => setNovo({...novo, utilizacaoCodigo: e.target.value, tipoCodigo: ""})}>
-                  <option value="">-- selecionar --</option>{listaUtils.map(u => <option key={u.id} value={u.id}>{u.id} - {u.nome}</option>)}
-                </select>
-              </div>
-              <div><label className="label">Tipo</label>
-                <select className="select" value={novo.tipoCodigo} disabled={!novo.utilizacaoCodigo} onChange={e => setNovo({...novo, tipoCodigo: e.target.value})}>
-                  <option value="">-- selecionar --</option>{listaTipos.filter(t => t.utilizacaoCodigo === novo.utilizacaoCodigo).map(t => <option key={t.id} value={t.Codigo}>{t.Codigo} - {t.nome}</option>)}
-                </select>
-              </div>
-              <div><label className="label">Nome do Material</label>
-                <input className="input" placeholder="Ex: Tenda Familiar Quechua" value={novo.nome} onChange={e => setNovo({...novo, nome: e.target.value})} />
-              </div>
-            </div>
 
-            {/* Bloco 2: Logística e Datas */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 15, marginBottom: 25, padding: '20px', background: '#f8fafc', borderRadius: 8 }}>
-              <div><label className="label">Estado</label><select className="select" value={novo.estado} onChange={e => setNovo({...novo, estado: e.target.value})}><option value="DISPONIVEL">DISPONIVEL</option><option value="MANUTENCAO">MANUTENÇÃO</option></select></div>
-              <div><label className="label">Operacional</label><select className="select" value={novo.estadoOperacional} onChange={e => setNovo({...novo, estadoOperacional: e.target.value})}><option value="OPERACIONAL">OPERACIONAL</option><option value="DANIFICADO">DANIFICADO</option></select></div>
-              <div><label className="label">Condição</label><select className="select" value={novo.condicao} onChange={e => setNovo({...novo, condicao: e.target.value})}><option value="NOVO">NOVO</option><option value="BOM">BOM</option><option value="USADO">USADO</option></select></div>
-              <div><label className="label">Aquisição</label><input type="date" className="input" value={novo.dataAquisicao} onChange={e => setNovo({...novo, dataAquisicao: e.target.value})} /></div>
-              <div><label className="label">Abate (prev.)</label><input type="date" className="input" value={novo.dataAbate} onChange={e => setNovo({...novo, dataAbate: e.target.value})} /></div>
-            </div>
+          <div className="equip-form__body">
+            {/* Bloco 1: Identidade */}
+            <section className="equip-section">
+              <div className="equip-section__header">
+                <h4>Identificação</h4>
+                <p>Define a utilização, tipo e nome comercial do material.</p>
+              </div>
+
+              <div className="equip-grid equip-grid--3">
+                <div className="field">
+                  <label className="field__label">Utilização</label>
+                  <select
+                    className="field__control"
+                    value={novo.utilizacaoCodigo}
+                    onChange={e =>
+                      setNovo({ ...novo, utilizacaoCodigo: e.target.value, tipoCodigo: "" })
+                    }
+                  >
+                    <option value="">-- selecionar --</option>
+                    {listaUtils.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.id} · {u.nome}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="field__hint">Ex.: Acampamento, Atividades de Sede, Cozinha…</p>
+                </div>
+
+                <div className="field">
+                  <label className="field__label">Tipo</label>
+                  <select
+                    className="field__control"
+                    value={novo.tipoCodigo}
+                    disabled={!novo.utilizacaoCodigo}
+                    onChange={e => setNovo({ ...novo, tipoCodigo: e.target.value })}
+                  >
+                    <option value="">-- selecionar --</option>
+                    {listaTipos
+                      .filter(t => t.utilizacaoCodigo === novo.utilizacaoCodigo)
+                      .map(t => (
+                        <option key={t.id} value={t.Codigo}>
+                          {t.Codigo} · {t.nome}
+                        </option>
+                      ))}
+                  </select>
+                  <p className="field__hint">Filtrado pela utilização escolhida.</p>
+                </div>
+
+                <div className="field">
+                  <label className="field__label">Nome do Material</label>
+                  <input
+                    className="field__control"
+                    placeholder="Ex.: Tenda Familiar Quechua"
+                    value={novo.nome}
+                    onChange={e => setNovo({ ...novo, nome: e.target.value })}
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* Bloco 2: Estado e datas */}
+            <section className="equip-section equip-section--muted">
+              <div className="equip-section__header">
+                <h4>Estado e Ciclo de Vida</h4>
+                <p>Controla disponibilidade, condição e datas relevantes.</p>
+              </div>
+
+              <div className="equip-grid equip-grid--5">
+                <div className="field">
+                  <label className="field__label">Estado</label>
+                  <select
+                    className="field__control"
+                    value={novo.estado}
+                    onChange={e => setNovo({ ...novo, estado: e.target.value })}
+                  >
+                    <option value="DISPONIVEL">Disponível</option>
+                    <option value="MANUTENCAO">Em manutenção</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label className="field__label">Operacional</label>
+                  <select
+                    className="field__control"
+                    value={novo.estadoOperacional}
+                    onChange={e => setNovo({ ...novo, estadoOperacional: e.target.value })}
+                  >
+                    <option value="OPERACIONAL">Operacional</option>
+                    <option value="DANIFICADO">Danificado</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label className="field__label">Condição</label>
+                  <select
+                    className="field__control"
+                    value={novo.condicao}
+                    onChange={e => setNovo({ ...novo, condicao: e.target.value })}
+                  >
+                    <option value="NOVO">Novo</option>
+                    <option value="BOM">Bom</option>
+                    <option value="USADO">Usado</option>
+                  </select>
+                </div>
+
+                <div className="field">
+                  <label className="field__label">Aquisição</label>
+                  <input
+                    type="date"
+                    className="field__control"
+                    value={novo.dataAquisicao}
+                    onChange={e => setNovo({ ...novo, dataAquisicao: e.target.value })}
+                  />
+                </div>
+
+                <div className="field">
+                  <label className="field__label">Abate (prev.)</label>
+                  <input
+                    type="date"
+                    className="field__control"
+                    value={novo.dataAbate}
+                    onChange={e => setNovo({ ...novo, dataAbate: e.target.value })}
+                  />
+                </div>
+              </div>
+            </section>
 
             {/* Bloco 3: Notas */}
-            <div className="grid-2" style={{ gap: 20 }}>
-              <div><label className="label">Descrição Interna</label><textarea className="input" style={{height:70, resize:'none'}} value={novo.descricao} onChange={e => setNovo({...novo, descricao: e.target.value})} /></div>
-              <div><label className="label">Observações de Gestão</label><textarea className="input" style={{height:70, resize:'none'}} value={novo.observacoes} onChange={e => setNovo({...novo, observacoes: e.target.value})} /></div>
-            </div>
+            <section className="equip-section">
+              <div className="equip-grid equip-grid--2">
+                <div className="field">
+                  <label className="field__label">Descrição Interna</label>
+                  <textarea
+                    className="field__control field__control--textarea"
+                    value={novo.descricao}
+                    onChange={e => setNovo({ ...novo, descricao: e.target.value })}
+                    placeholder="Notas técnicas, conteúdo do kit, medidas, etc."
+                  />
+                </div>
 
-            <div className="row" style={{ gap: 12, marginTop: 30, justifyContent: 'flex-end' }}>
-              <button className="btn-secondary" onClick={() => setShowNovo(false)}>Cancelar</button>
-              <button className="btn" style={{ padding: '10px 30px' }} onClick={handleCreate}>Confirmar Registo</button>
-            </div>
+                <div className="field">
+                  <label className="field__label">Observações de Gestão</label>
+                  <textarea
+                    className="field__control field__control--textarea"
+                    value={novo.observacoes}
+                    onChange={e => setNovo({ ...novo, observacoes: e.target.value })}
+                    placeholder="Restrições de uso, histórico de incidentes, prioridade de substituição…"
+                  />
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div className="equip-form__footer">
+            <button className="btn-secondary" onClick={() => setShowNovo(false)}>
+              Cancelar
+            </button>
+            <button className="btn" onClick={handleCreate}>
+              Confirmar registo
+            </button>
           </div>
         </div>
       )}
+
 
       {/* --- BARRA DE PESQUISA --- */}
       <div className="card" style={{ marginBottom: 20, display: 'flex', gap: 12, alignItems: 'center' }}>

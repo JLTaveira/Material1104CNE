@@ -141,6 +141,7 @@ export default function UserDashboard() {
         {/* Formulário Original */ }
         <div className="card">
           <h4 className="h4">Nova requisição</h4>
+          <h5 className="h5">Precisas do material entre que datas?</h5>
           <div className="row" style={{marginTop: 10}}>
             <input type="date" className="input" style={{flex:1}} onChange={e => setForm({...form, dataInicio: e.target.value})} />
             <input type="date" className="input" style={{flex:1}} onChange={e => setForm({...form, dataFim: e.target.value})} />

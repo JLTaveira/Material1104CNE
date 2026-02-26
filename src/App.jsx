@@ -2,13 +2,6 @@
  src/App.jsx
  2026-02-13 - Joao Taveira (jltaveira@gmail.com) */
 
-/* App.jsx - Versão RBAC Otimizada
-   src/App.jsx
-   2026-02-14 - João Taveira */
-
-/* App.jsx - Versão Final com Logística e Definições
-   2026-02-25 - Alforge 1104 */
-
 import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./authContext";

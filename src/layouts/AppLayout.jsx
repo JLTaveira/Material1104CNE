@@ -26,7 +26,7 @@ export default function AppLayout({ children }) {
     ];
     if (role === "ADMIN" || role === "GESTOR") {
       items.push({ to: "/admin", label: "Dashboard Material" });
-      items.push({ to: "/admin/inventario", label: "Gestão Inventário" });
+      // items.push({ to: "/admin/inventario", label: "Gestão Inventário" });
       items.push({ to: "/admin/requisicoes", label: "Gestão Requisições" });
     }
     if (role === "ADMIN") {
